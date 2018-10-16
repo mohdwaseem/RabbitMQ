@@ -1,0 +1,37 @@
+﻿
+@{
+    ViewData["Title"] = "SendReceive";
+}
+
+<div class="row">
+    <div class="jumbotron">
+    <h3>RabbitMQ Implementation</h3>
+        </div>
+</div>
+<div class="row">
+
+    <div class="col-md-6">
+
+        <div class="panel panel-info">
+            <div class="panel-heading">Send Messages</div>
+            <div class="panel-body">
+
+                @using (Html.BeginForm("SendMessage", "Home", FormMethod.Post,new { @class = "form-inline" }))
+                {
+                    <div class="form-group">
+                        <input type="text" name="msgText" class="form-control" />
+                        <input type="submit" value="Send Message" class="btn btn-success" />
+
+                    </div>
+                     
+                }
+
+            </div>
+
+        </div>
+
+
+    </div>
+
+</div>
+
