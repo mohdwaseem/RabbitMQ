@@ -5,8 +5,8 @@
 
 <div class="row">
     <div class="jumbotron">
-    <h3>RabbitMQ Implementation</h3>
-        </div>
+        <h3>RabbitMQ Implementation</h3>
+    </div>
 </div>
 <div class="row">
 
@@ -16,15 +16,46 @@
             <div class="panel-heading">Send Messages</div>
             <div class="panel-body">
 
-                @using (Html.BeginForm("SendMessage", "Home", FormMethod.Post,new { @class = "form-inline" }))
+                @using (Html.BeginForm("SendReceive", "Home", FormMethod.Post, new { @class = "form-inline" }))
                 {
                     <div class="form-group">
                         <input type="text" name="msgText" class="form-control" />
                         <input type="submit" value="Send Message" class="btn btn-success" />
-
                     </div>
-                     
+
                 }
+                <div class="alert alert-success">
+                    @ViewData["Msg"]
+                </div>
+            </div>
+
+        </div>
+
+
+    </div>
+    <div class="col-md-6">
+
+        <div class="panel panel-info">
+            <div class="panel-heading">Receive Messages</div>
+            <div class="panel-body">
+
+
+
+                @{
+                    if (ViewData["AllMessages"] != null)
+                    {
+                        <div class="alert alert-success">
+                            @ViewData["AllMessages"]
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            No Message found!
+                        </div>
+                    }
+                }
+
 
             </div>
 

@@ -18,8 +18,6 @@ namespace WebApplicationRabbitMQ.Controllers
         }
         public IActionResult Index()
         {
-          ViewBag.Message=   this._messageSender.SendMessage("You have accessed");
-
             return View();
         }
 
@@ -40,6 +38,15 @@ namespace WebApplicationRabbitMQ.Controllers
         public IActionResult SendReceive()
         {
             ViewBag.Title = "Send and Receive Messages with RabbitMQ";
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult SendReceive(string msgText)
+        {
+            _messageSender.SendMessage(msgText);
+            ViewData["Msg"] = "Message Sent Successfully";
+            ViewData["AllMessages"] = _messageSender.ReceiveMessage();
             return View();
         }
         public IActionResult Error()

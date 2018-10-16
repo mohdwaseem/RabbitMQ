@@ -7,6 +7,7 @@ namespace WebApplicationRabbitMQ.Services
 {
    public interface IMessageSender
     {
-        string SendMessage(string msg);
+        void SendMessage(string msg);
+        string ReceiveMessage();
     }
 }
