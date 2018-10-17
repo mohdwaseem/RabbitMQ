@@ -9,5 +9,7 @@ namespace WebApplicationRabbitMQ.Services
     {
         void SendMessage(string msg);
         string ReceiveMessage();
+        void SendSingleMessage(string msg, string queue);
+        string ReceiveSingleMessage(string queue);
     }
 }

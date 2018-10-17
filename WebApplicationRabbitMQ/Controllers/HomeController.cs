@@ -46,8 +46,15 @@ namespace WebApplicationRabbitMQ.Controllers
         {
             _messageSender.SendMessage(msgText);
             ViewData["Msg"] = "Message Sent Successfully";
-            ViewData["AllMessages"] = _messageSender.ReceiveMessage();
+            //ViewData["AllMessages"] = _messageSender.ReceiveMessage();
             return View();
+        }
+
+        [HttpPost]
+        public JsonResult ReceiveMsg()
+        {
+           var message= _messageSender.ReceiveMessage();
+            return Json(message);
         }
         public IActionResult Error()
         {

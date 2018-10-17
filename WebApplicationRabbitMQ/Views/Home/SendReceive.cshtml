@@ -55,7 +55,7 @@
                         </div>
                     }
                 }
-
+                <div id="divmsg"></div>
 
             </div>
 
@@ -66,3 +66,36 @@
 
 </div>
 
+@section Scripts{
+
+    <script>
+
+    $(function () {
+
+        setInterval(function () {
+                $.ajax({
+                    type: "POST",
+                    contentType: "application/json; charset=utf-8",
+                    data: '{}',
+                    url: "@Url.Action("ReceiveMsg")",
+                    dataType: "json",
+                    success: function (response) {
+                        var data = $("#divmsg").html();
+                        $("#divmsg").html(data + "<br>Message:" + response);
+
+                    },
+                    error: function (response) {
+
+                    }
+                });
+            }, 2000);
+
+
+
+
+
+    });
+
+    </script>
+
+}
