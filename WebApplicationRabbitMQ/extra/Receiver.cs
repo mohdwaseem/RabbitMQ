@@ -1,58 +1,100 @@
-﻿using log4net;
-using log4net.Config;
-using RabbitMQ.Client;
-using Receive.Services;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using NLog;
+using NLog.Extensions.Logging;
 using System;
+using System.Data;
+using System.Data.SqlClient;
 using System.IO;
 using System.Reflection;
-using System.Text;
- 
+
 
 namespace Receive
 {
-    class Receiver
+    public static class MessageLogger
     {
-        public static void Main()
+
+        public static IConfiguration GetConfiguration()
         {
-            
-
-            
-            Console.WriteLine("Please enter Queue Name");
-            //var queuename = Console.ReadLine();
-            var queuename = "efada_certificates";//
-            Console.WriteLine("---------------------Now Reading Messages-------------------");
-
-            try
+            var builder = new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json");
+            var configuration = builder.Build();
+            return configuration;
+        }
+        /// <summary>
+        /// Method to Log Messages to database
+        /// </summary>
+        /// <param name="correlationId"></param>
+        /// <param name="message"></param>
+        /// <param name="result"></param>
+        /// <returns></returns>
+        public static int SaveMessagesToDatabase(Guid correlationId, string message, string result)
+        {
+            using (var connection = new SqlConnection(GetConfiguration().GetConnectionString("DefaultConnection")))
             {
-                var factory = new ConnectionFactory { HostName = "localhost" };
-                using (var connection = factory.CreateConnection())
+                connection.Open();
+                var cmd = new SqlCommand("usp_tbl_MessageLogs_SaveLogs", connection)
                 {
-                    using (var channel = connection.CreateModel())
-                    {
-                        var queueDeclareResponse = channel.QueueDeclare(queue: queuename, durable: true, exclusive: false, autoDelete: false, arguments: null);
-                        var consumer = new QueueingBasicConsumer(channel);
-                        channel.BasicConsume(queue: queuename, autoAck: false, consumer: consumer);
-                        for (int i = 0; i < queueDeclareResponse.MessageCount; i++)
-                        {
-                            var ea = consumer.Queue.Dequeue();
-                            var body = ea.Body;
-                            var message = Encoding.UTF8.GetString(body);
-                            Console.WriteLine(" [x] Received {0}", message);
-                            //Saving to database
-                            MessageLogger.AddLogs(Guid.NewGuid(), message);
-                            //Set Acknowledgement to true
-                            channel.BasicAck(ea.DeliveryTag, true);
-                        }
-                        Console.WriteLine("Finished processing {0} messages.", queueDeclareResponse.MessageCount);
-                        Console.ReadLine();
-                    }
-                }
+                    CommandType = CommandType.StoredProcedure
+                };
+                cmd.Parameters.AddWithValue("@CorrelationId", correlationId);
+                cmd.Parameters.AddWithValue("@MessageData", message);
+                cmd.Parameters.AddWithValue("@Result", result);
+                return cmd.ExecuteNonQuery();
             }
-            catch (Exception ex)
+        }
+        /// <summary>
+        /// Method to Update Log based on correlationId
+        /// </summary>
+        /// <param name="correlationId"></param>
+        /// <param name="result"></param>
+        /// <returns></returns>
+        public static int UpdateMessageLog(string correlationId, string result)
+        {
+
+            using (var connection = new SqlConnection(GetConfiguration().GetConnectionString("DefaultConnection")))
             {
-                Console.WriteLine(ex.Message);
-                Console.ReadLine();
+                connection.Open();
+                var cmd = new SqlCommand("usp_tbl_Logs_UpdateLog", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+                cmd.Parameters.AddWithValue("@CorrelationId", correlationId);
+                cmd.Parameters.AddWithValue("@Result", result);
+                return cmd.ExecuteNonQuery();
             }
+        }
+
+        /// <summary>
+        /// Method to Save Logs Using NLog
+        /// </summary>
+        /// <param name="correlationId"></param>
+        /// <param name="message"></param>
+        /// <param name="result"></param>
+        public static void Log(Guid correlationId, string message, string result)
+        {
+            var servicesProvider = BuildDi();
+            Logger logger = LogManager.GetCurrentClassLogger();
+            LogEventInfo theEvent = new LogEventInfo(NLog.LogLevel.Debug, "Inbound Queue", message);
+            theEvent.Properties["CorrelationId"] = correlationId;
+            theEvent.Properties["Result"] = result;
+            logger.Log(theEvent);
+            LogManager.Shutdown();
+
+        }
+        private static IServiceProvider BuildDi()
+        {
+            var services = new ServiceCollection();
+            services.AddSingleton<ILoggerFactory, LoggerFactory>();
+            services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+            services.AddLogging((builder) => builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Debug));
+            var serviceProvider = services.BuildServiceProvider();
+            var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+            //configure NLog
+            loggerFactory.AddNLog(new NLogProviderOptions { CaptureMessageTemplates = true, CaptureMessageProperties = true });
+            NLog.LogManager.LoadConfiguration("NLog.config");
+            return serviceProvider;
         }
     }
 }
+
