@@ -34,14 +34,16 @@ namespace Receive
 
             }
         }
-        public static void AddMessageLogs()
+        public static void AddMessageLogs(string message)
         {
             var logRepository = LogManager.GetRepository(Assembly.GetEntryAssembly());
             XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
             // thread properties...
             //log4net.LogicalThreadContext.Properties["CustomColumn"] = "Custom value";
             // ...or global properties
-            log4net.GlobalContext.Properties["CustomColumn"] = "Custom value";
+            log4net.GlobalContext.Properties["CorrelationId"] = Guid.NewGuid();
+            log4net.GlobalContext.Properties["MessageData"] = message;
+            log4net.GlobalContext.Properties["CreatedOnUTC"] =DateTime.UtcNow;
             log.Info("Message");
         }
     }
