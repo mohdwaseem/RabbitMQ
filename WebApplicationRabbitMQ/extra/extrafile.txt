@@ -1,0 +1,248 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.Json;
+using RabbitMQ.Client;
+using RabbitMQSenderConsumer.Models;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+
+namespace RabbitMQSenderConsumer.RabbitMQ
+{
+    public class RabbitMQClient
+    {
+
+        private static ConnectionFactory _factory;
+        private static IConnection _connection;
+        private static IModel _model;
+        private static string ExchangeName;
+        private static string QueueName;
+        private static string routingKey;
+        private static string exchangeType;
+        private static QueueDeclareOk _queueDeclareResponse;
+
+        // Adding JSON file into IConfiguration.
+        IConfiguration config = new ConfigurationBuilder().AddJsonFile("appsettings.json", true, true).Build();
+
+
+        public RabbitMQClient()
+        {
+            var queueConfig = config.GetSection("QueuesExchange");
+            ExchangeName = queueConfig["ExchangeName"];
+            QueueName = queueConfig["QueueName"];
+            routingKey = queueConfig["routingKey"];
+            exchangeType = queueConfig["exchangeType"];
+            var hostConfig = config.GetSection("RabbitMQHostSetting");
+            CreateConnection(username: hostConfig["UserName"], password: hostConfig["Password"], virtualHost: hostConfig["VirtualHost"], hostname: hostConfig["HostName"]);
+
+        }
+
+        private static void CreateConnection(string username, string password, string virtualHost, string hostname)
+        {
+
+            _factory = new ConnectionFactory
+            {
+                UserName = username,
+                Password = password,
+                VirtualHost = virtualHost,
+                Port = AmqpTcpEndpoint.UseDefaultPort,
+                HostName = hostname,
+            };
+            _connection = _factory.CreateConnection();
+            _model = _connection.CreateModel();
+            _model.ExchangeDeclare(ExchangeName, exchangeType);
+            _queueDeclareResponse = _model.QueueDeclare(QueueName, true, false, false, null);
+            _model.QueueBind(QueueName, ExchangeName, routingKey);
+
+        }
+
+        public void Close()
+        {
+            _connection.Close();
+        }
+        public void SendMessage(string messageData)
+        {
+            _model.BasicPublish(ExchangeName, routingKey, null, Encoding.UTF8.GetBytes(messageData));
+        }
+
+
+
+        public void ConsumeMessage()
+        {
+            var consumer = new QueueingBasicConsumer(_model);
+            _model.BasicConsume(queue: QueueName, autoAck: false, consumer: consumer);
+            for (int i = 0; i < _queueDeclareResponse.MessageCount; i++)
+            {
+                var ea = consumer.Queue.Dequeue();
+                var body = ea.Body;
+                var message = Encoding.UTF8.GetString(body);
+                Console.WriteLine(" [x] Received {0}", message);
+
+                //Saving Logs using NLog
+                // MessageLogger.Log(correlationId: Guid.NewGuid(), message: message, result: "success");
+
+                //Set Acknowledgement to true
+                _model.BasicAck(ea.DeliveryTag, true);
+            }
+            Console.WriteLine("Finished processing {0} messages. at {1}", _queueDeclareResponse.MessageCount, DateTime.UtcNow);
+        }
+
+
+
+    }
+
+
+}
+------------------------
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace RabbitMQSenderConsumer.Models
+{
+    public class LeanIqamaModel
+    {
+
+        public int Id { get; set; }
+        public string ProfilePicKey { get; set; }
+        public string FullName { get; set; }
+        public int IdentityNo { get; set; }
+        public int Gender { get; set; }
+        public object Nationality { get; set; }
+        public int PersonType { get; set; }
+        public string BirthDate { get; set; }
+        public string PassportNumber { get; set; }
+        public string SponsorName { get; set; }
+        public string VisaNumber { get; set; }
+        public string VisaSource { get; set; }
+        public string Job { get; set; }
+        public string ApproveDate { get; set; }
+        public string HospitalNameAr { get; set; }
+        public bool Hearing { get; set; }
+        public bool BloodPressure { get; set; }
+        public bool HeartAndChest { get; set; }
+        public bool Neural { get; set; }
+        public bool Hernia { get; set; }
+        public bool VaricoseVeins { get; set; }
+        public bool Limbs { get; set; }
+        public bool ChestXRay { get; set; }
+        public bool Belly { get; set; }
+        public bool Skin { get; set; }
+        public int Psycho { get; set; }
+        public int Pregnancy { get; set; }
+        public bool LeftEye { get; set; }
+        public bool RightEye { get; set; }
+        public int RightEyeVisionWithGlasses { get; set; }
+        public int LeftEyeVisionWithGlasses { get; set; }
+        public bool BloodSugar { get; set; }
+        public bool Malaria { get; set; }
+        public bool ViralHepatitisB { get; set; }
+        public bool ViralHepatitisC { get; set; }
+        public bool Syphilis { get; set; }
+        public bool Aids { get; set; }
+        public bool UrineSugar { get; set; }
+        public bool UrineClear { get; set; }
+        public bool StoolParasites { get; set; }
+        public bool StoolSalamonia { get; set; }
+        public bool StoolShigla { get; set; }
+        public int FinalResult { get; set; }
+        public DateTime ResultExpiryDate { get; set; }
+        public int CertificateID { get; set; }
+        public string Notes { get; set; }
+        public List<string> Warnings { get; set; }
+        public List<string> Restrictions { get; set; }
+    }
+}
+---------------------------------------
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=W12928\\MSSQLSERVER1;Initial Catalog=RabbitMQLoggingDB;Integrated Security=True"
+  },
+  "Logging": {
+    "IncludeScopes": false,
+    "LogLevel": {
+      "Default": "Warning"
+    }
+  },
+  "RabbitMQHostSetting": {
+    "UserName": "emc",
+    "Password": "Pa$$w0rd",
+    "VirtualHost": "test",
+    "HostName": "10.31.144.87"
+  },
+  "QueuesExchange": {
+    "ExchangeName": "Efada_Exchange",
+    "InBoundQueue": "efada_certificatesInbound",
+    "routingKey": "inbound",
+    "exchangeType": "direct"
+  }
+}
+-----------------------
+using Newtonsoft.Json;
+using RabbitMQSenderConsumer.Models;
+using RabbitMQSenderConsumer.RabbitMQ;
+using System;
+using System.Collections.Generic;
+using System.IO;
+
+namespace RabbitMQSenderConsumer
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            try
+            {
+                RabbitMQClient client = new RabbitMQClient();
+                Console.WriteLine("Please type s for sending and r for consuming");
+                var choice = Console.ReadLine().ToLower();
+                switch (choice)
+                {
+                    case "s":
+                        Console.WriteLine("Please enter certificateId");
+                        int certificateID =Convert.ToInt16(Console.ReadLine());
+                        for (int i = 0; i < 50; i++)
+                        {
+                            client.SendMessage(ReadDataFromJson(i,certificateID));
+                        }
+                        Console.WriteLine("Mesage Sent");
+                        Console.ReadLine();
+                        break;
+                    case "r":
+                        Console.WriteLine("-------Reading Messages-------- ");
+                        client.ConsumeMessage();
+                        Console.ReadLine();
+                        break;
+                     
+                    default:
+                        Console.WriteLine("Invalid selection. Please select s or r.");
+                        Console.ReadLine();
+                        break;
+                }
+                client.Close();
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public static string ReadDataFromJson(int counter,int certificateId)
+        {
+            List<LeanIqamaModel> leanList = new List<LeanIqamaModel>();
+            leanList.Add(item: new LeanIqamaModel
+            {
+                Id = counter,
+                ProfilePicKey = "Profile-Key: " + counter,
+                FullName = "Name- " + counter,
+                IdentityNo = counter,
+                PassportNumber = "PASSPORT: " + counter,
+                ResultExpiryDate = DateTime.UtcNow.AddMinutes(counter),
+                CertificateID = certificateId
+            });
+            string outPutJson = JsonConvert.SerializeObject(leanList);
+            return outPutJson;
+        }
+    }
+}
+------------------------
