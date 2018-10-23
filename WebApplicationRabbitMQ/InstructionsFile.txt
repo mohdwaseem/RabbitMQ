@@ -2,3 +2,35 @@
 
 
 https://www.c-sharpcorner.com/article/chat-application-with-rabbitmq-using-asp-net-mvc/
+
+public static string GetMessage()
+    {
+        List<Person> pList = new List<Person>();
+        for (int i = 0; i < 10; i++)
+        {
+            pList.Add(new Person
+            {
+                Id = i,
+                FirstName = "FName" + i,
+                LastName = "LName" + i,
+                Mobile = (i + 1).ToString()
+            });
+            string outPutJson = JsonConvert.SerializeObject(pList);
+            File.WriteAllText("sample.json", outPutJson);
+        }
+
+        String jsonString = File.ReadAllText("sample.json");
+
+        pList = JsonConvert.DeserializeObject<List<Person>>(jsonString);
+
+        return jsonString;
+    }
+
+
+    public class Person
+    {
+        public int Id { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Mobile { get; set; }
+    }
