@@ -239,3 +239,5 @@ namespace RabbitMQSenderConsumer.Utility
 
     }
 }
+==
+https://stackoverflow.com/questions/38834262/configuring-nlog-programmatically
