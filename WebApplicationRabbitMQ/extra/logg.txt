@@ -1,0 +1,241 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using NLog;
+using NLog.Extensions.Logging;
+using System;
+using System.Data;
+using System.Data.SqlClient;
+
+namespace EMC.MessagingExchange.LogLibrary
+{
+    public static class MaintainLogs
+    {
+        /// <summary>
+        /// Method to Save Logs Using NLog
+        /// </summary>
+        /// <param name="correlationId"></param>
+        /// <param name="message"></param>
+        /// <param name="result"></param>
+        public static void Log(Guid correlationId, string message, string result)
+        {
+            var servicesProvider = BuildDi();
+            Logger logger = LogManager.GetCurrentClassLogger();
+            LogEventInfo theEvent = new LogEventInfo(NLog.LogLevel.Debug, logger.Name, message);
+            theEvent.Properties["CorrelationId"] = correlationId;
+            theEvent.Properties["Result"] = result;
+            logger.Log(theEvent);
+            LogManager.Shutdown();
+
+        }
+        ///// <summary>
+        ///// Method to Update Log based on correlationId
+        ///// </summary>
+        ///// <param name="correlationId"></param>
+        ///// <param name="result"></param>
+        ///// <returns></returns>
+        //public static int UpdateMessageLog(string correlationId, string result)
+        //{
+
+        //    using (var connection = new SqlConnection(GetConfiguration().GetConnectionString("DefaultConnection")))
+        //    {
+        //        connection.Open();
+        //        var cmd = new SqlCommand("usp_tbl_Logs_UpdateLog", connection)
+        //        {
+        //            CommandType = CommandType.StoredProcedure
+        //        };
+        //        cmd.Parameters.AddWithValue("@CorrelationId", correlationId);
+        //        cmd.Parameters.AddWithValue("@Result", result);
+        //        return cmd.ExecuteNonQuery();
+        //    }
+        //}
+        /// <summary>
+        /// Get Logger Object
+        /// </summary>
+        /// <returns></returns>
+        public static Logger WriteLog()
+        {
+            var servicesProvider = BuildDi();
+            Logger logger = LogManager.GetCurrentClassLogger();
+            return logger;
+        }
+
+        private static IServiceProvider BuildDi()
+        {
+            var services = new ServiceCollection();
+            services.AddSingleton<ILoggerFactory, LoggerFactory>();
+            services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+            services.AddLogging((builder) => builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Debug));
+            var serviceProvider = services.BuildServiceProvider();
+            var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+            //configure NLog
+            loggerFactory.AddNLog(new NLogProviderOptions { CaptureMessageTemplates = true, CaptureMessageProperties = true });
+            NLog.LogManager.LoadConfiguration("NLog.config");
+            return serviceProvider;
+        }
+    }
+}
+==================================startup============================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Hangfire;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using EMC.MessagingExchange.MessagingQueuesHandler;
+using Microsoft.EntityFrameworkCore;
+using EMC.MessagingExchange.LogLibrary;
+
+namespace EMC.MessagingExchange.BackgroundProcessor
+{
+    public class Startup
+    {
+        public Startup(IConfiguration configuration)
+        {
+            Configuration = configuration;
+        }
+
+        public IConfiguration Configuration { get; }
+
+        // This method gets called by the runtime. Use this method to add services to the container.
+        public void ConfigureServices(IServiceCollection services)
+        {
+            //services.AddDbContext<DataContext>(options =>
+            //    options.UseSqlServer(
+            //        Configuration.GetConnectionString("DefaultConnection")));
+
+            services.AddTransient<ICustomLogger, CustomLogger>();
+            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+            services.AddHangfire(config =>
+                config.UseSqlServerStorage(Configuration.GetConnectionString("HangfireConnection")));
+        }
+
+        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseHsts();
+            }
+
+            //app.UseHttpsRedirection();
+            //app.UseStaticFiles();
+            app.UseHangfireDashboard();
+            app.UseHangfireServer();
+            app.UseMvc();
+
+            var jobRunner = new JobsRunner(Configuration);
+            var inBoundQueueName = Configuration.GetValue<string>("AppKeys:InBoundQueueName");
+            var pendingQueueName = Configuration.GetValue<string>("AppKeys:PendingQueueName");
+
+            //RecurringJob.AddOrUpdate(() => jobRunner.SaveMessagesFromQueueToDatabase(inBoundQueueName), Cron.Minutely);
+           // RecurringJob.AddOrUpdate(() => jobRunner.SaveMessagesFromQueueToDatabase(pendingQueueName), Cron.Minutely);
+            RecurringJob.AddOrUpdate(() => jobRunner.SendNotification(), Cron.Minutely);
+        }
+    }
+}
+=================================
+
+<?xml version="1.0" encoding="utf-8" ?>
+<nlog xmlns="http://www.nlog-project.org/schemas/NLog.xsd"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.nlog-project.org/schemas/NLog.xsd NLog.xsd"
+      autoReload="true"
+      throwExceptions="false"
+      internalLogLevel="Off" internalLogFile="c:\temp\nlog-internal.log">
+
+  <!-- optional, add some variables
+  https://github.com/nlog/NLog/wiki/Configuration-file#variables
+  -->
+  <variable name="myvar" value="myvalue"/>
+
+  <!--
+  See https://github.com/nlog/nlog/wiki/Configuration-file
+  for information on customizing logging rules and outputs.
+   -->
+  <targets>
+
+    <target name="SaveToDB"
+         xsi:type="Database"
+         dbProvider="System.Data.SqlClient"
+         connectionString="Data Source=W12928\MSSQLSERVER1;Initial Catalog=RabbitMQLoggingDB;Integrated Security=True"
+         commandType="StoredProcedure"
+         commandText="[dbo].[usp_tbl_Logs_SaveLogs]">
+      <parameter name="@machineName"   layout="${machinename}" />
+      <parameter name="@level"          layout="${level}" />
+      <parameter name="@CorrelationId" layout="${event-properties:item=CorrelationId}" />
+      <parameter name="@MessageData"   layout="${message}" />
+      <parameter name="@Result"        layout="${event-properties:item=Result}"  />
+      <parameter name="@logged"        layout="${date}" />
+      <parameter name="@exception"     layout="${exception:tostring}" />
+      <parameter name="@logger"        layout="${logger}" />
+      <parameter name="@serverAddress"  layout="${aspnet-request:serverVariable=LOCAL_ADDR}" />
+      <parameter name="@remoteAddress"  layout="${aspnet-request:serverVariable=REMOTE_ADDR}:${aspnet-request:serverVariable=REMOTE_PORT}" />
+
+    </target>
+
+    <target xsi:type="File" name="fileTarget" fileName="c:\temp\RabbitMQLogs.log"
+    layout="${date}|${level:uppercase=true}|${message} ${exception:format=tostring}|${logger}|${all-event-properties}" />
+
+  </targets>
+
+  <rules>
+    <!-- add your logging rules here -->
+    <logger name="*" minlevel="Trace" writeTo="fileTarget,SaveToDB" />
+
+  </rules>
+</nlog>
+===========================================
+
+using NLog;
+using NLog.Common;
+using NLog.Config;
+using NLog.Targets;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace RabbitMQSenderConsumer.Utility
+{
+    class NLogConfig
+    {
+        public void AddConfiguration()
+        {
+            var config = new LoggingConfiguration();
+            var dbTarget = new DatabaseTarget
+            {
+                ConnectionString = @"Data Source=W12928\MSSQLSERVER1;Initial Catalog=RabbitMQLoggingDB;Integrated Security=True",
+                DBProvider = "System.Data.SqlClient",
+                Name = "SaveToDB",
+                CommandType= System.Data.CommandType.StoredProcedure,
+                CommandText = @"[dbo].[usp_tbl_Logs_SaveLogs]"
+            };
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@logged", "${date}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@level", "${level}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@message", "${message}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@username", "${identity}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@url", "${aspnet-request:serverVariable=HTTP_URL}${aspnet-request:queryString}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@remoteAddress", "${aspnet-request:serverVariable=REMOTE_ADDR}:${aspnet-request:serverVariable=REMOTE_PORT}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@logger", "${logger}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@callSite", "${callsite}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@exception", "${exception:format=tostring}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@stacktrace", "${stacktrace:format=DetailedFlat}"));
+            config.AddTarget("SaveToDB", dbTarget);
+            var rule = new LoggingRule("*", LogLevel.Trace, dbTarget);
+            config.LoggingRules.Add(rule);
+            LogManager.Configuration = config;
+            InternalLogger.LogFile = "";
+        }
+
+    }
+}
