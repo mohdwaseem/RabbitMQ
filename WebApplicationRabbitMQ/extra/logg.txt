@@ -241,3 +241,5 @@ namespace RabbitMQSenderConsumer.Utility
 }
 ==
 https://stackoverflow.com/questions/38834262/configuring-nlog-programmatically
+
+https://stackoverflow.com/questions/24070349/nlog-switching-from-nlog-config-to-programmatic-configuration
