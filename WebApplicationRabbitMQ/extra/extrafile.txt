@@ -246,3 +246,6 @@ namespace RabbitMQSenderConsumer
     }
 }
 ------------------------
+
+
+https://cmatskas.com/getting-started-with-rabbitmq-on-windows/
