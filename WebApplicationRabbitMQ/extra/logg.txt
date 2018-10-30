@@ -243,3 +243,55 @@ namespace RabbitMQSenderConsumer.Utility
 https://stackoverflow.com/questions/38834262/configuring-nlog-programmatically
 
 https://stackoverflow.com/questions/24070349/nlog-switching-from-nlog-config-to-programmatic-configuration
+
+
+===============
+USE [RabbitMQLoggingDB]
+GO
+/****** Object:  Table [dbo].[tbl_Logs]    Script Date: 10/30/2018 4:44:03 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[tbl_Logs](
+	[Id] [numeric](18, 0) IDENTITY(1,1) NOT NULL,
+	[MachineName] [nvarchar](200) NULL,
+	[Level] [varchar](50) NULL,
+	[CorrelationId] [nvarchar](50) NULL,
+	[MessageData] [nvarchar](max) NULL,
+	[Result] [nvarchar](max) NULL,
+	[Logged] [datetime] NOT NULL,
+	[Exception] [nvarchar](max) NULL,
+	[Logger] [nvarchar](300) NULL,
+	[ServerAddress] [nvarchar](100) NULL,
+	[RemoteAddress] [nvarchar](100) NULL,
+ CONSTRAINT [PK_TestLog] PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+/****** Object:  StoredProcedure [dbo].[usp_tbl_Logs_SaveLogs]    Script Date: 10/30/2018 4:44:04 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE PROC [dbo].[usp_tbl_Logs_SaveLogs]
+(
+    @machineName nvarchar(200),
+	@level varchar(50),
+	@CorrelationId nvarchar(50),
+	@MessageData nvarchar(max),
+	@Result nvarchar(max),
+	@Exception nvarchar(max),
+	@Logger nvarchar(300),
+	@Logged datetime,
+	@serverAddress nvarchar(100),
+    @remoteAddress nvarchar(100)
+)
+AS
+BEGIN
+INSERT INTO [dbo].[tbl_Logs]([MachineName],[Level],[CorrelationId],[MessageData],[Result],[Logged] ,[Exception],[Logger],[ServerAddress],[RemoteAddress])
+VALUES(@machineName,@level,@CorrelationId,@MessageData,@Result,@Logged,@Exception,@Logger,@serverAddress,@remoteAddress)
+END
+GO
