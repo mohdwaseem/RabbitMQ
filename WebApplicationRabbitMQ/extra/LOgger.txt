@@ -1,0 +1,110 @@
+====================
+public class CustomLogger : ICustomLogger
+    {
+        private readonly string connectionString;
+        Logger logger = null;
+        public CustomLogger(string _conString)
+        {
+            connectionString = _conString;
+            var config = new LoggingConfiguration();
+            var dbTarget = new DatabaseTarget
+            {
+                ConnectionString = _conString,
+                DBProvider = "System.Data.SqlClient",
+                Name = "SaveToDB",
+                CommandType = System.Data.CommandType.StoredProcedure,
+                CommandText = @"[dbo].[usp_tbl_Logs_SaveLogs]"
+            };
+
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@machineName", "${machineName}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@level", "${level}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@CorrelationId", "${event-properties:item=CorrelationId}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@MessageData", "${message}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@Result", "${event-properties:item=Result}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@logged", "${date}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@exception", "${exception:format=tostring}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@logger", "${logger}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@serverAddress", "${aspnet-request:serverVariable=LOCAL_ADDR}"));
+            dbTarget.Parameters.Add(new DatabaseParameterInfo("@remoteAddress", "${aspnet-request:serverVariable=REMOTE_ADDR}:${aspnet-request:serverVariable=REMOTE_PORT}"));
+            config.AddTarget("SaveToDB", dbTarget);
+            var rule = new LoggingRule("*", LogLevel.Trace, dbTarget);
+            config.LoggingRules.Add(rule);
+            LogManager.Configuration = config;
+            logger = LogManager.GetCurrentClassLogger();
+            InternalLogger.LogFile = @"c:\\temp\\test.text";
+        }
+        public void LogMessage(string correlationId, string message, string result)
+        {
+            //Logger logger = LogManager.GetCurrentClassLogger();
+            LogEventInfo eventInfo = new LogEventInfo(LogLevel.Trace, logger.Name, message);
+            eventInfo.Properties["CorrelationId"] = correlationId;
+            eventInfo.Properties["Result"] = result;
+            logger.Log(eventInfo);
+
+        }
+
+        public void LogError(Exception ex)
+        {
+            logger.Error(ex, ex.Message);
+        }
+
+        public void LogInfo(Exception ex, string message)
+        {
+            logger.Info(ex, message);
+        }
+
+    }
+	========================
+	public interface ICustomLogger
+    {
+        /// <summary>
+        /// Method to Log Message
+        /// </summary>
+        /// <param name="correlationId"></param>
+        /// <param name="message"></param>
+        /// <param name="result"></param>
+        void LogMessage(string correlationId, string message, string result);
+
+        /// <summary>
+        /// Method to Log Exception
+        /// </summary>
+        /// <param name="correlationId"></param>
+        /// <param name="ex"></param>
+        void LogError(Exception ex);
+
+        /// <summary>
+        /// Method to Log Information
+        /// </summary>
+        /// <param name="ex"></param>
+        /// <param name="message"></param>
+        void LogInfo(Exception ex, string message);
+
+    }
+	============
+	
+	var conn= Configuration.GetValue<string>("ConnectionStrings:NLogString");
+            services.AddTransient<ICustomLogger>(s => new CustomLogger(conn));
+			
+			=============
+ private ICustomLogger customLogger;
+        public HomeController(ICustomLogger _customLogger)
+        {
+            this.customLogger = _customLogger;
+        }
+
+        public IActionResult Index()
+        {
+            customLogger.LogMessage(Guid.NewGuid().ToString(),"Write Custom Log","Ok");
+
+            int x = 1;
+            try
+            {
+                x = x / 0;
+            }
+            catch (Exception ex)
+            {
+                customLogger.LogInfo(ex, "Custom");
+                customLogger.LogError(ex);
+            }
+            return View();
+        }
